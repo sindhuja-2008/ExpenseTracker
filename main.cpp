@@ -4,6 +4,7 @@
 #include <string>
 #include <iomanip>
 #include <sstream>
+#include <fstream>
 
 using namespace std;
 
@@ -12,6 +13,8 @@ struct Expense {
     string category;
     double amount;
 };
+
+const string DATA_FILE = "expenses.txt";
 
 // Read a non-empty string
 string readText(const string& prompt) {
@@ -37,7 +40,11 @@ int readChoice() {
 
     while (true) {
         cout << "Enter your choice: ";
-        getline(cin, line);
+
+        if (!getline(cin, line)) {
+            cout << "\nInput closed. Exiting program.\n";
+            return 5;
+        }
 
         stringstream ss(line);
 
@@ -58,7 +65,11 @@ double readAmount() {
 
     while (true) {
         cout << "Enter amount: ";
-        getline(cin, line);
+
+        if (!getline(cin, line)) {
+            cout << "\nInput closed. Exiting program.\n";
+            return -1;
+        }
 
         stringstream ss(line);
 
@@ -71,6 +82,68 @@ double readAmount() {
     }
 }
 
+// Save all expenses to a file
+bool saveExpenses(const vector<Expense>& expenses) {
+    ofstream file(DATA_FILE, ios::trunc);
+
+    if (!file.is_open()) {
+        cerr << "Error: Could not open " << DATA_FILE
+             << " for saving.\n";
+        return false;
+    }
+
+    file << setprecision(17);
+
+    for (const Expense& e : expenses) {
+        file << quoted(e.name) << ' '
+             << quoted(e.category) << ' '
+             << e.amount << '\n';
+    }
+
+    file.close();
+
+    if (file.fail()) {
+        cerr << "Error: Could not save expenses successfully.\n";
+        return false;
+    }
+
+    return true;
+}
+
+// Load previously saved expenses
+void loadExpenses(vector<Expense>& expenses) {
+    ifstream file(DATA_FILE);
+
+    // A missing file is normal on the first run.
+    if (!file.is_open()) {
+        return;
+    }
+
+    Expense e;
+
+    while (file >> quoted(e.name)
+                >> quoted(e.category)
+                >> e.amount) {
+
+        if (e.name.empty() || e.category.empty()
+            || e.amount <= 0 || e.amount > 1000000000.0) {
+            cerr << "Warning: Invalid record in "
+                 << DATA_FILE << ". Loading stopped.\n";
+            break;
+        }
+
+        expenses.push_back(e);
+    }
+
+    if (!file.eof() && file.fail()) {
+        cerr << "Warning: Could not read all records from "
+             << DATA_FILE << ".\n";
+    }
+
+    cout << expenses.size()
+         << " saved expense(s) loaded.\n";
+}
+
 // Add an expense
 void addExpense(vector<Expense>& expenses) {
     Expense e;
@@ -81,9 +154,19 @@ void addExpense(vector<Expense>& expenses) {
     e.category = readText("Enter category: ");
     e.amount = readAmount();
 
+    if (e.amount < 0) {
+        cout << "Expense was not added.\n";
+        return;
+    }
+
     expenses.push_back(e);
 
-    cout << "Expense added successfully!\n";
+    if (saveExpenses(expenses)) {
+        cout << "Expense added and saved successfully!\n";
+    } else {
+        expenses.pop_back();
+        cout << "Expense was not saved. Please check the file location.\n";
+    }
 }
 
 // Display all expenses
@@ -101,7 +184,6 @@ void listExpenses(const vector<Expense>& expenses) {
          << right << setw(12) << "Amount" << '\n';
 
     cout << string(52, '-') << '\n';
-
     cout << fixed << setprecision(2);
 
     for (const Expense& e : expenses) {
@@ -151,9 +233,10 @@ void overallTotal(const vector<Expense>& expenses) {
 // Main program
 int main() {
     vector<Expense> expenses;
-    int choice;
 
-    do {
+    loadExpenses(expenses);
+
+    while (true) {
         cout << "\n========== EXPENSE TRACKER ==========\n";
         cout << "1. Add Expense\n";
         cout << "2. List Expenses\n";
@@ -162,7 +245,7 @@ int main() {
         cout << "5. Exit\n";
         cout << "=====================================\n";
 
-        choice = readChoice();
+        int choice = readChoice();
 
         switch (choice) {
             case 1:
@@ -187,10 +270,7 @@ int main() {
 
             case 5:
                 cout << "Thank you for using Expense Tracker!\n";
-                break;
+                return 0;
         }
-
-    } while (choice != 5);
-
-    return 0;
+    }
 }
